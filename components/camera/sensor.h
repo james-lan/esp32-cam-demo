@@ -14,6 +14,7 @@
 #define OV9650_PID     (0x96)
 #define OV2640_PID     (0x26)
 #define OV7725_PID     (0x77)
+#define MT9M001_PID    (0xBA)
 
 
 typedef struct {
@@ -28,6 +29,7 @@ typedef enum {
     PIXFORMAT_YUV422,    // 2BPP/YUV422
     PIXFORMAT_GRAYSCALE, // 1BPP/GRAYSCALE
     PIXFORMAT_JPEG,      // JPEG/COMPRESSED
+    PIXFORMAT_GRAYSCALE10, // 2BPP/10bit/GRAYSCALE
 } pixformat_t;
 
 typedef enum {
@@ -45,6 +47,7 @@ typedef enum {
     FRAMESIZE_SVGA,     // 800x600
     FRAMESIZE_SXGA,     // 1280x1024
     FRAMESIZE_UXGA,     // 1600x1200
+    FRAMESIZE_HSXGA,     // 640x512
 } framesize_t;
 
 typedef enum {

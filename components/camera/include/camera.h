@@ -26,6 +26,7 @@ typedef enum {
     CAMERA_PF_YUV422 = 1,       //!< YUYV, 2 bytes per pixel (not implemented)
     CAMERA_PF_GRAYSCALE = 2,    //!< 1 byte per pixel
     CAMERA_PF_JPEG = 3,         //!< JPEG compressed
+    CAMERA_PF_GRAYSCALE10 =4,
 } camera_pixelformat_t;
 
 typedef enum {
@@ -33,6 +34,7 @@ typedef enum {
     CAMERA_FS_QVGA = 8,      //!< 320x240
     CAMERA_FS_VGA = 10,      //!< 640x480
     CAMERA_FS_SVGA = 11,     //!< 800x600
+    CAMERA_FS_SXGA = 12,     //!< 1280x1024
 } camera_framesize_t;
 
 typedef enum {
@@ -40,6 +42,7 @@ typedef enum {
     CAMERA_UNKNOWN = 1,
     CAMERA_OV7725 = 7725,
     CAMERA_OV2640 = 2640,
+    CAMERA_MT9M001 = 9001,
 } camera_model_t;
 
 typedef struct {
@@ -58,6 +61,8 @@ typedef struct {
     int pin_vsync;          /*!< GPIO pin for camera VSYNC line */
     int pin_href;           /*!< GPIO pin for camera HREF line */
     int pin_pclk;           /*!< GPIO pin for camera PCLK line */
+    int pin_d8;             /*!< UNUSED SO FAR: GPIO pin for camera D8 line */
+    int pin_d9;             /*!< UNUSED SO FAR: GPIO pin for camera D8 line */
 
     int xclk_freq_hz;       /*!< Frequency of XCLK signal, in Hz */
 

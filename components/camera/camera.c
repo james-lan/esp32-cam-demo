@@ -42,6 +42,9 @@
 #if CONFIG_OV7725_SUPPORT
 #include "ov7725.h"
 #endif
+//#if CONFIG_MT9M001_SUPPORT
+#include "mt9m001.h"
+//#endif
 
 #define ENABLE_TEST_PATTERN CONFIG_ENABLE_TEST_PATTERN
 
@@ -147,6 +150,7 @@ esp_err_t camera_probe(const camera_config_t* config, camera_model_t* out_camera
     /* Probe the sensor */
     delay(10);
     uint8_t slv_addr = SCCB_Probe();
+    //uint8_t slv_addr = 0xBA;
     if (slv_addr == 0) {
         *out_camera_model = CAMERA_NONE;
         return ESP_ERR_CAMERA_NOT_DETECTED;
@@ -154,10 +158,18 @@ esp_err_t camera_probe(const camera_config_t* config, camera_model_t* out_camera
     s_state->sensor.slv_addr = slv_addr;
     ESP_LOGD(TAG, "Detected camera at address=0x%02x", slv_addr);
     sensor_id_t* id = &s_state->sensor.id;
+    if (0){//slv_addr != 0xBA) { //MTM9001 ARDUCAM module 
     id->PID = SCCB_Read(slv_addr, REG_PID);
     id->VER = SCCB_Read(slv_addr, REG_VER);
     id->MIDL = SCCB_Read(slv_addr, REG_MIDL);
     id->MIDH = SCCB_Read(slv_addr, REG_MIDH);
+    } else {
+	    //Fill with junk
+	    id->PID = MT9M001_PID;
+	    id->VER = MT9M001_PID;
+	    id->MIDL = MT9M001_PID;
+	    id->MIDH = SCCB_Read(slv_addr, 0x00);//MT9M001_PID;
+    }
     delay(10);
     ESP_LOGD(TAG, "Camera PID=0x%02x VER=0x%02x MIDL=0x%02x MIDH=0x%02x",
             id->PID, id->VER, id->MIDH, id->MIDL);
@@ -174,6 +186,12 @@ esp_err_t camera_probe(const camera_config_t* config, camera_model_t* out_camera
             *out_camera_model = CAMERA_OV7725;
             ov7725_init(&s_state->sensor);
             break;
+#endif
+#if CONFIG_OV7725_SUPPORT
+	case MT9M001_PID:
+		*out_camera_model = CAMERA_MT9M001;
+		mt9m001_init(&s_state->sensor);
+		break;
 #endif
         default:
             id->PID = 0;
@@ -223,8 +241,8 @@ esp_err_t camera_init(const camera_config_t* config)
 #endif
 
     if (pix_format == PIXFORMAT_GRAYSCALE) {
-        if (s_state->sensor.id.PID != OV7725_PID) {
-            ESP_LOGE(TAG, "Grayscale format is only supported for ov7225");
+        if (s_state->sensor.id.PID != OV7725_PID && s_state->sensor.id.PID != MT9M001_PID) {
+            ESP_LOGE(TAG, "Grayscale format is only supported for ov7225 or mt9m001");
             err = ESP_ERR_NOT_SUPPORTED;
             goto fail;
         }

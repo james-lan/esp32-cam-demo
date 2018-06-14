@@ -24,6 +24,67 @@
 #include "soc/gpio_reg.h"
 #include "wiring.h"
 #include <stdio.h>
+#define USE_NATIVE_I2C
+#ifdef USE_NATIVE_I2C
+#include "driver/i2c.h"
+
+#define I2C_FREQ 100000
+#define I2C_PORT 1
+#define ACK_CHECK_EN 0x1
+#define ACK_VAL 0x0
+#define NACK_VAL 0x1 
+
+void twi_init(unsigned char sda, unsigned char scl){
+	int i2c_master_port = I2C_PORT;
+	i2c_config_t conf;
+	conf.mode = I2C_MODE_MASTER;
+	conf.sda_io_num = sda;
+	conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
+	conf.scl_io_num = scl;
+	conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
+	conf.master.clk_speed = I2C_FREQ;
+	i2c_param_config(i2c_master_port, &conf);
+	i2c_driver_install(i2c_master_port, conf.mode, 0, 0, 0);
+	
+}
+void twi_stop(void) {
+	return;
+	//i2c_master_stop ? 
+}
+void twi_setClock(unsigned int freq){
+	return;
+	//Going to ignore this for now, as it's set as a define, at initilization
+}
+uint8_t twi_writeTo(unsigned char address, unsigned char * buf, unsigned int len, unsigned char sendStop) {
+	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+	i2c_master_start(cmd);
+	i2c_master_write_byte(cmd, ( address /*<< 1*/ ) | I2C_MASTER_WRITE, ACK_CHECK_EN);
+	i2c_master_write(cmd, buf, len, ACK_CHECK_EN);
+	i2c_master_stop(cmd);
+	esp_err_t ret = i2c_master_cmd_begin(I2C_PORT, cmd, 1000 / portTICK_RATE_MS);
+	i2c_cmd_link_delete(cmd);
+	return ret;
+}
+uint8_t twi_readFrom(unsigned char address, unsigned char * buf, unsigned int len, unsigned char sendStop)
+{
+	if (len == 0) {
+		return ESP_OK;
+	}
+	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+	i2c_master_start(cmd);
+	i2c_master_write_byte(cmd, ( address /*<< 1*/ ) | I2C_MASTER_READ, ACK_CHECK_EN);
+	if (len > 1) {
+		i2c_master_read(cmd, buf, len - 1, ACK_VAL);
+	}
+	i2c_master_read_byte(cmd, buf + len - 1, NACK_VAL);
+	i2c_master_stop(cmd);
+	esp_err_t ret = i2c_master_cmd_begin(I2C_PORT, cmd, 1000 / portTICK_RATE_MS);
+	i2c_cmd_link_delete(cmd);
+	return ret;
+}
+
+
+#else
 
 unsigned char twi_dcount = 18;
 static unsigned char twi_sda, twi_scl;
@@ -261,3 +322,4 @@ unsigned char twi_readFrom(unsigned char address, unsigned char* buf, unsigned i
   }
   return 0;
 }
+#endif
