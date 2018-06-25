@@ -111,15 +111,14 @@ uint8_t SCCB_Read16(uint8_t slv_addr, uint8_t reg, uint8_t data[2])
 	if (rc != 0) {
 		data[0] = 0xFF;
 		data[1] = 0xFF;
-		printf("RC failed write: %02x\n", rc);
-	}
-	else {
+		printf("SCCB_Read16 RC failed write: %02x\n", rc);
+	} else {
 		rc = twi_readFrom(slv_addr, data_read, 2, true);
 		if (rc != 0) {
-			printf("RC failed read: %02x %02x\n", data_read[0], data_read[1]);
+			printf("SCCB_Read16 RC failed read: %02x %02x\n", data_read[0], data_read[1]);
 			data[0] = 0xFF;
 			data[1] = 0xFF;
-			printf("RC failed read: %02x\n", rc);
+			printf("SCCB_Read16 RC failed read: %02x\n", rc);
 		}
 	}
 	//__enable_irq();
@@ -128,9 +127,9 @@ uint8_t SCCB_Read16(uint8_t slv_addr, uint8_t reg, uint8_t data[2])
 	data_out=(data[0]<<8) + data[1];
 	if (rc != 0) {
 		printf("SCCB_Read16 [%02x] failed rc=%d\n", reg, rc);
-		return data_out;
+		return rc;
 	}
 	printf("SCCB_Read16 [%02x] success rc=%d, data = %02x %02x\n", reg, rc, data[0], data[1]);
 
-	return data_out;
+	return 0;
 }
