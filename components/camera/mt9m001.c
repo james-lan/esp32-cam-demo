@@ -12,19 +12,44 @@ static const char* TAG = "mt9m001";
 
 static int reset(sensor_t *sensor)
 {
-	const TickType_t xDelay = 5 / portTICK_PERIOD_MS;
 	int ret = 0;
 	//Bit 0 needs to be set to 1, then 0 to reset
 	uint8_t reg[2];
 	uint8_t data = 0;
+	SCCB_Read16(sensor->slv_addr, 0x00, reg);
+	SCCB_Read16(sensor->slv_addr, 0x01, reg);
+	SCCB_Read16(sensor->slv_addr, 0x02, reg);
+	SCCB_Read16(sensor->slv_addr, 0x03, reg);
+	SCCB_Read16(sensor->slv_addr, 0x04, reg);
+	SCCB_Read16(sensor->slv_addr, 0x05, reg);
+	SCCB_Read16(sensor->slv_addr, 0x06, reg);
+	SCCB_Read16(sensor->slv_addr, 0x07, reg);
+	SCCB_Read16(sensor->slv_addr, 0x09, reg);
+	SCCB_Read16(sensor->slv_addr, 0x0B, reg);
+	SCCB_Read16(sensor->slv_addr, 0x0C, reg);
+	SCCB_Read16(sensor->slv_addr, 0x0D, reg);
+	SCCB_Read16(sensor->slv_addr, 0x1E, reg);
+	SCCB_Read16(sensor->slv_addr, 0x20, reg);
+	SCCB_Read16(sensor->slv_addr, 0x2B, reg);
+	SCCB_Read16(sensor->slv_addr, 0x2C, reg);
+	SCCB_Read16(sensor->slv_addr, 0x2D, reg);
+	SCCB_Read16(sensor->slv_addr, 0x2E, reg);
+	SCCB_Read16(sensor->slv_addr, 0x32, reg);
+	SCCB_Read16(sensor->slv_addr, 0x35, reg);
+	SCCB_Read16(sensor->slv_addr, 0x5F, reg);
+	SCCB_Read16(sensor->slv_addr, 0x60, reg);
+	SCCB_Read16(sensor->slv_addr, 0x61, reg);
+	SCCB_Read16(sensor->slv_addr, 0x62, reg);
+	SCCB_Read16(sensor->slv_addr, 0x63, reg);
+	SCCB_Read16(sensor->slv_addr, 0x64, reg);
+	SCCB_Read16(sensor->slv_addr, 0xF1, reg);
 	if (SCCB_Read16(sensor->slv_addr, RESET, reg) != 0)
 	{
-		ESP_LOGE(TAG, "Register Read (0x20, RESET) Failed");
+		ESP_LOGE(TAG, "Register Read (0X0D, RESET) Failed");
 	} else {
 		reg[0] = reg[0] | 0x00;
 		reg[1] = reg[1] | 0x01;
 		ret |= SCCB_Write16(sensor->slv_addr, RESET, reg);
-		vTaskDelay( xDelay );
 // 	}
 // 	if(SCCB_Read16(sensor->slv_addr, READ_OPTION_2, reg) != 0)
 // 	{
@@ -36,58 +61,166 @@ static int reset(sensor_t *sensor)
 		reg[1] = reg[1] & 0xFE;
 		ret |= SCCB_Write16(sensor->slv_addr, RESET, reg);
 	}
-	vTaskDelay( xDelay );
-	if(SCCB_Read16(sensor->slv_addr, OUTPUT_CONTROL, reg) != 0)
-	{
-		ESP_LOGE(TAG, "Register Read (0x07, OUTPUT_CONTROL) Failed");
-		vTaskDelay( xDelay );
-		if(SCCB_Read16(sensor->slv_addr, CHIP_ENABLE, reg) != 0)
-		{
-			ESP_LOGE(TAG, "Register Read (0xF1, CHIP_ENABLE) Retry Failed");
-		} else {
-			reg[0] = reg[0] | 0x00;
-			reg[1] = reg[1] | 0x01;
-			//reg = reg | 0x0001;
-			ret |= SCCB_Write16(sensor->slv_addr, CHIP_ENABLE, reg);
-		}
-	} else {
-		reg[0] = reg[0] | 0x00;
-		reg[1] = reg[1] | OUPTUT_CONTROL_ENABLE;
-		//reg = reg | 0x0001;
-		ret |= SCCB_Write16(sensor->slv_addr, OUTPUT_CONTROL, reg);
-	}
-	vTaskDelay( xDelay );
-  	//data = SCCB_Read16(sensor->slv_addr, READ_OPTION_2, reg); //Clear Skip 2
-	if(SCCB_Read16(sensor->slv_addr, READ_OPTION_2, reg) != 0)
-	{
-		ESP_LOGE(TAG, "Register Read (0x20, READ_OPTION_2) Failed");
-	} else {
-		reg[0] = reg[0] & 0xFF;
-		reg[1] = reg[1] | 0x18;
-		ret |= SCCB_Write16(sensor->slv_addr, READ_OPTION_2, reg);//*/
-	}
-	if(SCCB_Read16(sensor->slv_addr, READ_OPTION_2, reg) != 0)
-	{
-		ESP_LOGE(TAG, "Register Read (0x20, READ_OPTION_2) Failed");
-	} else {
-		reg[0] = reg[0] & 0xFF;
-		reg[1] = reg[1] & 0xE7;
-		ret |= SCCB_Write16(sensor->slv_addr, READ_OPTION_2, reg);//*/
-	}
-	if(SCCB_Read16(sensor->slv_addr, READ_OPTION_1, reg) != 0)
-	{
-		ESP_LOGE(TAG, "Register Read (0X1E, READ_OPTION_1) Failed");
-	} else {
-		reg[0] = reg[0] & 0xFF; //Make damned sure column/row skips are disabled. 
-		reg[1] = reg[1] & 0xC9;
-		ret |= SCCB_Write16(sensor->slv_addr, READ_OPTION_1, reg);//*/
-	}
-	
-	data = SCCB_Read16(sensor->slv_addr, GLOBAL_GAIN, reg);
+	data = SCCB_Read16(sensor->slv_addr, EVEN_ROW_EVEN_COLUMN, reg);
 	//reg = reg & 0xFFFE;
 	reg[0] = 0;
-	reg[1] = 0x7F;
-	ret |= SCCB_Write16(sensor->slv_addr, GLOBAL_GAIN, reg);
+	reg[1] = 0x67;//67 max
+	ret |= SCCB_Write16(sensor->slv_addr, EVEN_ROW_EVEN_COLUMN, reg);
+	data = SCCB_Read16(sensor->slv_addr, EVEN_ROW_EVEN_COLUMN, reg);
+	data = SCCB_Read16(sensor->slv_addr, ODD_ROW_EVEN_COLUMN, reg);
+	//reg = reg & 0xFFFE;
+	reg[0] = 0;
+	reg[1] = 0x67;//67 max
+	ret |= SCCB_Write16(sensor->slv_addr, ODD_ROW_EVEN_COLUMN, reg);
+	data = SCCB_Read16(sensor->slv_addr, ODD_ROW_EVEN_COLUMN, reg);
+	data = SCCB_Read16(sensor->slv_addr, ODD_ROW_ODD_COLUMN, reg);
+	//reg = reg & 0xFFFE;
+	reg[0] = 0;
+	reg[1] = 0x67;//67 max
+	ret |= SCCB_Write16(sensor->slv_addr, ODD_ROW_ODD_COLUMN, reg);
+	data = SCCB_Read16(sensor->slv_addr, ODD_ROW_ODD_COLUMN, reg);
+	data = SCCB_Read16(sensor->slv_addr, EVEN_ROW_ODD_COLUMN, reg);
+	//reg = reg & 0xFFFE;
+	reg[0] = 0;
+	reg[1] = 0x67;//67 max
+	ret |= SCCB_Write16(sensor->slv_addr, EVEN_ROW_ODD_COLUMN, reg);
+	data = SCCB_Read16(sensor->slv_addr, EVEN_ROW_ODD_COLUMN, reg);	
+	data = SCCB_Read16(sensor->slv_addr, HORIZONTAL_BLANKING, reg);
+	//reg = reg & 0xFFFE;
+	reg[0] = 0;
+	reg[1] = 0x10;//Supposed to be 10 bits... doesn't seem to change
+	ret |= SCCB_Write16(sensor->slv_addr, HORIZONTAL_BLANKING, reg);
+	data = SCCB_Read16(sensor->slv_addr, HORIZONTAL_BLANKING, reg);
+	if (SCCB_Read16(sensor->slv_addr, READ_OPTION_2, reg) != 0)
+	{
+		ESP_LOGE(TAG, "Register Read (0X0D, READ_OPTION_2) Failed");
+	} else {
+		reg[0] = reg[0] | 0x00;
+		reg[1] = reg[1] | 0x01;
+		ret |= SCCB_Write16(sensor->slv_addr, READ_OPTION_2, reg);
+		// 	}
+		// 	if(SCCB_Read16(sensor->slv_addr, READ_OPTION_2, reg) != 0)
+		// 	{
+		// 		ESP_LOGE(TAG, "Register Read (0x20, READ_OPTION_2) Failed (Reset to ready)");
+		// 	} else {
+		//reg = reg & 0xFFFE;
+ 		SCCB_Read16(sensor->slv_addr, READ_OPTION_2, reg);
+// 		reg[0] = reg[0] & 0xFF;
+// 		reg[1] = reg[1] & 0xFE;
+// 		ret |= SCCB_Write16(sensor->slv_addr, READ_OPTION_2, reg);
+	}
+// 	if(SCCB_Read16(sensor->slv_addr, OUTPUT_CONTROL, reg) != 0)
+// 	{
+// 		ESP_LOGE(TAG, "Register Read (0x07, OUTPUT_CONTROL) Failed");
+// 		if(SCCB_Read16(sensor->slv_addr, CHIP_ENABLE, reg) != 0)
+// 		{
+// 			ESP_LOGE(TAG, "Register Read (0xF1, CHIP_ENABLE) Retry Failed");
+// 		} else {
+// 			reg[0] = reg[0] | 0x00;
+// 			reg[1] = reg[1] | 0x01;
+// 			//reg = reg | 0x0001;
+// 			ret |= SCCB_Write16(sensor->slv_addr, CHIP_ENABLE, reg);
+// 		}
+// 	} else {
+// 		reg[0] = reg[0] | 0x00;
+// 		reg[1] = reg[1] | OUPTUT_CONTROL_ENABLE;
+// 		//reg = reg | 0x0001;
+// 		ret |= SCCB_Write16(sensor->slv_addr, OUTPUT_CONTROL, reg);
+// 	}
+// // 	vTaskDelay( xDelay );
+//   	//data = SCCB_Read16(sensor->slv_addr, READ_OPTION_2, reg); //Clear Skip 2
+// // 	if(SCCB_Read16(sensor->slv_addr, READ_OPTION_2, reg) != 0)
+// // 	{
+// // 		ESP_LOGE(TAG, "Register Read (0x20, READ_OPTION_2) Failed");
+// // 	} else {
+// // 		reg[0] = reg[0] & 0xFF;
+// // 		reg[1] = reg[1] | 0x18;
+// // 		ret |= SCCB_Write16(sensor->slv_addr, READ_OPTION_2, reg);//*/
+// // 	}
+// 	if(SCCB_Read16(sensor->slv_addr, READ_OPTION_2, reg) != 0)
+// 	{
+// 		ESP_LOGE(TAG, "Register Read (0x20, READ_OPTION_2) Failed");
+// 	} else {
+// 		reg[0] = reg[0] & 0xFF;
+// 		reg[1] = reg[1] & 0xE7;
+// 		ret |= SCCB_Write16(sensor->slv_addr, READ_OPTION_2, reg);//*/
+// 	}
+// 	if(SCCB_Read16(sensor->slv_addr, READ_OPTION_1, reg) != 0)
+// 	{
+// 		ESP_LOGE(TAG, "Register Read (0X1E, READ_OPTION_1) Failed");
+// 	} else {
+// 		reg[0] = reg[0] & 0xFF; //Make damned sure column/row skips are disabled. 
+// 		reg[1] = reg[1] & 0xC9;
+// 		ret |= SCCB_Write16(sensor->slv_addr, READ_OPTION_1, reg);//*/
+// 	}
+	
+
+	//Test Data... works
+	/*
+	if (SCCB_Read16(sensor->slv_addr, OUTPUT_CONTROL, reg) != 0)
+	{
+		ESP_LOGE(TAG, "Register Read (0X07, OUTPUT_CONTROL) Failed");
+	} else {
+		reg[0] = reg[0] | 0x00;
+		reg[1] = reg[1] | OUPTUT_CONTROL_TEST_DATA;
+		ret |= SCCB_Write16(sensor->slv_addr, OUTPUT_CONTROL, reg);
+	}
+	if (SCCB_Read16(sensor->slv_addr, TEST_DATA, reg) != 0)
+	{
+		ESP_LOGE(TAG, "Register Read (TEST_DATA) Failed");
+	} else {
+		reg[0] = reg[0] | 0b00001011;
+		reg[1] = reg[1] | 0b00000000;
+		ret |= SCCB_Write16(sensor->slv_addr, TEST_DATA, reg);
+	}
+	//*/
+	//Trigger mode... doesn't work
+	/*
+	if (SCCB_Read16(sensor->slv_addr, READ_OPTION_1, reg) != 0)
+	{
+		ESP_LOGE(TAG, "Register Read (READ_OPTION_1) Failed");
+	} else {
+		reg[0] = reg[0] | 0x01;
+		reg[1] = reg[1] | 0x00;
+		ret |= SCCB_Write16(sensor->slv_addr, READ_OPTION_1, reg);
+	}
+	if (SCCB_Read16(sensor->slv_addr, RESTART, reg) != 0)
+	{
+		ESP_LOGE(TAG, "Register Read (%d, RESTART) Failed", READ_OPTION_1);
+	} else {
+		reg[0] = reg[0] | 0x00;
+		reg[1] = reg[1] | 0x01;
+		ret |= SCCB_Write16(sensor->slv_addr, RESTART, reg);
+	}
+	//*/
+	SCCB_Read16(sensor->slv_addr, 0x00, reg);
+	SCCB_Read16(sensor->slv_addr, 0x01, reg);
+	SCCB_Read16(sensor->slv_addr, 0x02, reg);
+	SCCB_Read16(sensor->slv_addr, 0x03, reg);
+	SCCB_Read16(sensor->slv_addr, 0x04, reg);
+	SCCB_Read16(sensor->slv_addr, 0x05, reg);
+	SCCB_Read16(sensor->slv_addr, 0x06, reg);
+	SCCB_Read16(sensor->slv_addr, 0x07, reg);
+	SCCB_Read16(sensor->slv_addr, 0x09, reg);
+	SCCB_Read16(sensor->slv_addr, 0x0B, reg);
+	SCCB_Read16(sensor->slv_addr, 0x0C, reg);
+	SCCB_Read16(sensor->slv_addr, 0x0D, reg);
+	SCCB_Read16(sensor->slv_addr, 0x1E, reg);
+	SCCB_Read16(sensor->slv_addr, 0x20, reg);
+	SCCB_Read16(sensor->slv_addr, 0x2B, reg);
+	SCCB_Read16(sensor->slv_addr, 0x2C, reg);
+	SCCB_Read16(sensor->slv_addr, 0x2D, reg);
+	SCCB_Read16(sensor->slv_addr, 0x2E, reg);
+	SCCB_Read16(sensor->slv_addr, 0x32, reg);
+	SCCB_Read16(sensor->slv_addr, 0x35, reg);
+	SCCB_Read16(sensor->slv_addr, 0x5F, reg);
+	SCCB_Read16(sensor->slv_addr, 0x60, reg);
+	SCCB_Read16(sensor->slv_addr, 0x61, reg);
+	SCCB_Read16(sensor->slv_addr, 0x62, reg);
+	SCCB_Read16(sensor->slv_addr, 0x63, reg);
+	SCCB_Read16(sensor->slv_addr, 0x64, reg);
+	SCCB_Read16(sensor->slv_addr, 0xF1, reg);
+	
 	
 	return ret;
 }
@@ -114,9 +247,9 @@ static int set_framesize(sensor_t *sensor, framesize_t framesize)
 	int data;
 	uint16_t w = resolution[framesize][0]-1;
 	uint16_t h = resolution[framesize][1]-1;
-	if (w > 1280) w = 1280-1;
-	if (h > 1024) h = 1024-1;
-	w=1280;
+	if (w >= 1280) w = 1280-1;
+	if (h >= 1024) h = 1024-1;
+	w=1280+1;
 	h=1024;
 	data = SCCB_Read16(sensor->slv_addr, ROW_SIZE, reg);
 	//reg = reg & 0xFFFE;
@@ -150,7 +283,7 @@ static int set_whitebal(sensor_t *sensor, int enable)
 static int set_gain_ctrl(sensor_t *sensor, int enable)
 {
 	//Not implemented
-	unsigned char reg[2];
+/*	unsigned char reg[2];
 	int ret = 0;
 	int data;
 	data = SCCB_Read16(sensor->slv_addr, GLOBAL_GAIN, reg);
@@ -158,6 +291,7 @@ static int set_gain_ctrl(sensor_t *sensor, int enable)
 		reg[0] = 0;
 		reg[1] = 0x7F;
 		ret |= SCCB_Write16(sensor->slv_addr, GLOBAL_GAIN, reg);
+	*/
 	return 0;
 }
 

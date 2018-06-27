@@ -89,7 +89,8 @@ static void i2s_stop();
 
 static bool is_hs_mode()
 {
-    return s_state->config.xclk_freq_hz > 10000000;
+    //return s_state->config.xclk_freq_hz > 10000000;
+	return 1;
 }
 
 static size_t i2s_bytes_per_sample(i2s_sampling_mode_t mode)
@@ -115,6 +116,7 @@ static void vsync_intr_disable()
 static void vsync_intr_enable()
 {
     gpio_set_intr_type(s_state->config.pin_vsync, GPIO_INTR_NEGEDGE);
+    //GPIO_INTR_ANYEDGE);
 }
 
 
@@ -246,13 +248,16 @@ esp_err_t camera_init(const camera_config_t* config)
             err = ESP_ERR_NOT_SUPPORTED;
             goto fail;
         }
-        s_state->fb_size = s_state->width * s_state->height;
+        s_state->fb_size = (s_state->width+1) * s_state->height;
         if (is_hs_mode()) {
-            s_state->sampling_mode = SM_0A0B_0B0C;
+		s_state->sampling_mode = SM_0A0B_0C0D;
+		//s_state->sampling_mode = SM_0A00_0B00;
             s_state->dma_filter = &dma_filter_grayscale_highspeed;
+	    ESP_LOGI(TAG, "Using: dma_filter_grayscale_highspeed/Mode 1");
         } else {
             s_state->sampling_mode = SM_0A0B_0C0D;
             s_state->dma_filter = &dma_filter_grayscale;
+	    ESP_LOGI(TAG, "Using: dma_filter_grayscale/Mode 3");
         }
         s_state->in_bytes_per_pixel = 2;       // camera sends YUYV
         s_state->fb_bytes_per_pixel = 1;       // frame buffer stores Y8
@@ -304,13 +309,14 @@ esp_err_t camera_init(const camera_config_t* config)
         goto fail;
     }
 
-    ESP_LOGD(TAG, "in_bpp: %d, fb_bpp: %d, fb_size: %d, mode: %d, width: %d height: %d",
+    ESP_LOGI(TAG, "in_bpp: %d, fb_bpp: %d, fb_size: %d, mode: %d, width: %d height: %d",
             s_state->in_bytes_per_pixel, s_state->fb_bytes_per_pixel,
             s_state->fb_size, s_state->sampling_mode,
             s_state->width, s_state->height);
 
-    ESP_LOGD(TAG, "Allocating frame buffer (%d bytes)", s_state->fb_size);
-    s_state->fb = (uint8_t*) calloc(s_state->fb_size, 1);
+    ESP_LOGI(TAG, "Allocating frame buffer (%d bytes)", s_state->fb_size);
+    //s_state->fb = (uint8_t*) calloc(s_state->fb_size, 1);
+    s_state->fb = (uint8_t*) heap_caps_calloc(s_state->fb_size, 1, MALLOC_CAP_SPIRAM);
     if (s_state->fb == NULL) {
         ESP_LOGE(TAG, "Failed to allocate frame buffer");
         err = ESP_ERR_NO_MEM;
@@ -336,6 +342,8 @@ esp_err_t camera_init(const camera_config_t* config)
         ESP_LOGE(TAG, "Failed to create DMA filter task");
         err = ESP_ERR_NO_MEM;
         goto fail;
+    } else {
+	    ESP_LOGV(TAG, "Created DMA filter task");
     }
 
     ESP_LOGD(TAG, "Initializing GPIO interrupts");
@@ -357,6 +365,13 @@ esp_err_t camera_init(const camera_config_t* config)
         ;
     }
     s_state->frame_count = 0;
+    
+//    ESP_LOGE(TAG, "Changing XCLK");
+//    camera_disable_out_clock();
+//    s_state->config.xclk_freq_hz = 1000000;
+    //config->xclk_freq_hz = 1000000;
+//    camera_enable_out_clock(config);
+    
     ESP_LOGD(TAG, "Init done");
     return ESP_OK;
 
@@ -436,8 +451,9 @@ esp_err_t camera_run()
     memset(s_state->fb, 0, s_state->fb_size);
 #endif // _NDEBUG
     i2s_run();
-    ESP_LOGD(TAG, "Waiting for frame");
+    ESP_LOGI(TAG, "Waiting for frame");
     xSemaphoreTake(s_state->frame_ready, portMAX_DELAY);
+    //xSemaphoreTake(s_state->frame_ready, ( TickType_t ) 0x000fffffUL);
     struct timeval tv_end;
     gettimeofday(&tv_end, NULL);
     int time_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + (tv_end.tv_usec - tv_start.tv_usec) / 1000;
@@ -449,34 +465,46 @@ esp_err_t camera_run()
 static esp_err_t dma_desc_init()
 {
     assert(s_state->width % 4 == 0);
-    size_t line_size = s_state->width * s_state->in_bytes_per_pixel *
-            i2s_bytes_per_sample(s_state->sampling_mode);
-    ESP_LOGD(TAG, "Line width (for DMA): %d bytes", line_size);
+    size_t line_size = s_state->width * s_state->in_bytes_per_pixel; //*i2s_bytes_per_sample(s_state->sampling_mode); //Temp, because with Mode 1
+    ESP_LOGI(TAG, "Line width (for DMA): %d bytes", line_size);
     size_t dma_per_line = 1;
     size_t buf_size = line_size;
     while (buf_size >= 4096) {
         buf_size /= 2;
         dma_per_line *= 2;
-    }
+    } 
     size_t dma_desc_count = dma_per_line * 4;
     s_state->dma_buf_width = line_size;
     s_state->dma_per_line = dma_per_line;
     s_state->dma_desc_count = dma_desc_count;
-    ESP_LOGD(TAG, "DMA buffer size: %d, DMA buffers per line: %d", buf_size, dma_per_line);
-    ESP_LOGD(TAG, "DMA buffer count: %d", dma_desc_count);
+    ESP_LOGI(TAG, "DMA buffer size: %d, DMA buffers per line: %d", buf_size, dma_per_line);
+    ESP_LOGI(TAG, "DMA buffer count: %d", dma_desc_count);
 
-    s_state->dma_buf = (dma_elem_t**) malloc(sizeof(dma_elem_t*) * dma_desc_count);
+//     s_state->dma_buf = (dma_elem_t**) malloc(sizeof(dma_elem_t*) * dma_desc_count);
+  s_state->dma_buf = (dma_elem_t**) //malloc(sizeof(dma_elem_t*) * dma_desc_count);
+	heap_caps_malloc(sizeof(dma_elem_t*) * dma_desc_count, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
     if (s_state->dma_buf == NULL) {
         return ESP_ERR_NO_MEM;
+    }else {
+	    ESP_LOGV(TAG, "dma_buf=%p size=%d", s_state->dma_buf, sizeof(dma_elem_t*) * dma_desc_count);
     }
-    s_state->dma_desc = (lldesc_t*) malloc(sizeof(lldesc_t) * dma_desc_count);
+//    ESP_LOGD(TAG, "Allocating DMA buffer #%d, size=%d", i, buf_size);
+//    s_state->dma_desc = (lldesc_t*) malloc(sizeof(lldesc_t) * dma_desc_count);
+
+    s_state->dma_desc = (lldesc_t*) //malloc(sizeof(lldesc_t) * dma_desc_count);
+	heap_caps_malloc(sizeof(lldesc_t) * dma_desc_count, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
     if (s_state->dma_desc == NULL) {
         return ESP_ERR_NO_MEM;
+    } else {
+	    ESP_LOGV(TAG, "dma_desc=%p size=%d", s_state->dma_desc, sizeof(lldesc_t*) * dma_desc_count);
     }
     size_t dma_sample_count = 0;
     for (int i = 0; i < dma_desc_count; ++i) {
-        ESP_LOGD(TAG, "Allocating DMA buffer #%d, size=%d", i, buf_size);
-        dma_elem_t* buf = (dma_elem_t*) malloc(buf_size);
+	    ESP_LOGD(TAG, "Allocating DMA buffer #%d, size=%d, free=%d", i, buf_size,xPortGetFreeHeapSize());
+	    ESP_LOGE(TAG, "Current free heap: %d, minimum ever free heap: %d", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize());
+//        dma_elem_t* buf = (dma_elem_t*) malloc(buf_size);
+	dma_elem_t* buf = (dma_elem_t*) //malloc(buf_size);
+		heap_caps_malloc(buf_size, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
         if (buf == NULL) {
             return ESP_ERR_NO_MEM;
         }
@@ -488,6 +516,7 @@ static esp_err_t dma_desc_init()
         if (s_state->sampling_mode == SM_0A0B_0B0C &&
             (i + 1) % dma_per_line == 0) {
             pd->length -= 4;
+	    //pd->length +=4;
         }
         dma_sample_count += pd->length / 4;
         pd->size = pd->length;
@@ -591,13 +620,19 @@ static void i2s_init()
     // Configure clock divider
     I2S0.clkm_conf.clkm_div_a = 1;
     I2S0.clkm_conf.clkm_div_b = 0;
-    I2S0.clkm_conf.clkm_div_num = 2;
+    I2S0.clkm_conf.clkm_div_num = 1;
     // FIFO will sink data to DMA
+//#ifdef PSRAM_NO_DMA
+//    I2S0.fifo_conf.dscr_en = 0;
+//#else // PSRAM_NO_DMA
     I2S0.fifo_conf.dscr_en = 1;
+    
+//#endif
     // FIFO configuration
-    I2S0.fifo_conf.rx_fifo_mod = s_state->sampling_mode;
-    I2S0.fifo_conf.rx_fifo_mod_force_en = 1;
-    I2S0.conf_chan.rx_chan_mod = 1;
+    I2S0.fifo_conf.rx_fifo_mod = s_state->sampling_mode; 
+    I2S0.fifo_conf.rx_fifo_mod_force_en = 1; //Per docs should always be 1
+    I2S0.conf_chan.rx_chan_mod = 1; //16-bit single channel data 
+    
     // Clear flags which are used in I2S serial mode
     I2S0.sample_rate_conf.rx_bits_mod = 0;
     I2S0.conf.rx_right_first = 0;
@@ -685,7 +720,7 @@ static void IRAM_ATTR i2s_isr(void* arg)
     I2S0.int_clr.val = I2S0.int_raw.val;
     bool need_yield;
     signal_dma_buf_received(&need_yield);
-    ESP_EARLY_LOGV(TAG, "isr, cnt=%d", s_state->dma_received_count);
+//    ESP_EARLY_LOGV(TAG, "isr, cnt=%d", s_state->dma_received_count);
     if (s_state->dma_received_count == s_state->height * s_state->dma_per_line) {
         i2s_stop();
     }
@@ -697,7 +732,7 @@ static void IRAM_ATTR i2s_isr(void* arg)
 static void IRAM_ATTR gpio_isr(void* arg)
 {
     bool need_yield = false;
-    ESP_EARLY_LOGV(TAG, "gpio isr, cnt=%d", s_state->dma_received_count);
+//    ESP_EARLY_LOGV(TAG, "gpio isr, cnt=%d", s_state->dma_received_count);
     if (gpio_get_level(s_state->config.pin_vsync) == 0 &&
             s_state->dma_received_count > 0 &&
             !s_state->dma_done) {
@@ -709,14 +744,15 @@ static void IRAM_ATTR gpio_isr(void* arg)
     }
 }
 
-static size_t get_fb_pos()
+static size_t IRAM_ATTR get_fb_pos()
 {
-    return s_state->dma_filtered_count * s_state->width *
-            s_state->fb_bytes_per_pixel / s_state->dma_per_line;
+	return (s_state->dma_filtered_count) * (s_state->width)*
+            s_state->fb_bytes_per_pixel / s_state->dma_per_line ;
 }
 
 static void IRAM_ATTR dma_filter_task(void *pvParameters)
 {
+//	ESP_LOGV(TAG, "dma_flt: START");
     while (true) {
         size_t buf_idx;
         xQueueReceive(s_state->data_ready, &buf_idx, portMAX_DELAY);
@@ -727,6 +763,7 @@ static void IRAM_ATTR dma_filter_task(void *pvParameters)
         }
 
         size_t fb_pos = get_fb_pos();
+	fb_pos += (int) fb_pos / s_state->width;
         assert(fb_pos <= s_state->fb_size + s_state->width *
                 s_state->fb_bytes_per_pixel / s_state->dma_per_line);
 
@@ -735,12 +772,13 @@ static void IRAM_ATTR dma_filter_task(void *pvParameters)
         lldesc_t* desc = &s_state->dma_desc[buf_idx];
         (*s_state->dma_filter)(buf, desc, pfb);
         s_state->dma_filtered_count++;
-        ESP_LOGV(TAG, "dma_flt: flt_count=%d ", s_state->dma_filtered_count);
+//        ESP_LOGV(TAG, "dma_flt: flt_count=%d ", s_state->dma_filtered_count);
     }
 }
 
 static void IRAM_ATTR dma_filter_grayscale(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst)
 {
+//	ESP_LOGV(TAG, "dma_filter_grayscale: start ");
     assert(s_state->sampling_mode == SM_0A0B_0C0D);
     size_t end = dma_desc->length / sizeof(dma_elem_t) / 4;
     for (size_t i = 0; i < end; ++i) {
@@ -756,16 +794,35 @@ static void IRAM_ATTR dma_filter_grayscale(const dma_elem_t* src, lldesc_t* dma_
 
 static void IRAM_ATTR dma_filter_grayscale_highspeed(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst)
 {
-    assert(s_state->sampling_mode == SM_0A0B_0B0C);
-    size_t end = dma_desc->length / sizeof(dma_elem_t) / 8;
+//	assert(s_state->sampling_mode == SM_0A00_0B00);
+	assert(s_state->sampling_mode == SM_0A0B_0C0D);
+    size_t end = dma_desc->length / sizeof(dma_elem_t) / 4;
     for (size_t i = 0; i < end; ++i) {
         // manually unrolling 4 iterations of the loop here
-        dst[0] = src[0].sample1;
-        dst[1] = src[2].sample1;
-        dst[2] = src[4].sample1;
-        dst[3] = src[6].sample1;
-        src += 8;
-        dst += 4;
+	dst[0] = /*0xFF; */src[0].sample1;
+	dst[1] = src[0].sample2;
+	dst[2] = src[1].sample1;
+	dst[3] = src[1].sample2;
+	dst[4] = src[2].sample1;
+	dst[5] = src[2].sample2;
+	dst[6] = src[3].sample1;
+	dst[7] = /*0;*/src[3].sample2;
+	    
+// 	    dst[0] = 1;//src[0].sample1;
+// 	    dst[1] = src[1].sample1;
+// 	    dst[2] = src[2].sample1;
+// 	    dst[3] = src[3].sample1;
+	   
+// 	dst[0] = src[0].sample1;
+// 	dst[1] = src[2].sample1;
+// 	dst[2] = src[4].sample1;
+// 	dst[3] = src[6].sample1;
+// 	    dst[0] = src[0].sample1;
+// 	    dst[1] = src[1].sample1;
+// 	    dst[2] = src[2].sample1;
+// 	    dst[3] = src[3].sample1;    
+        src += 4; 
+        dst += 8;
     }
     // the final sample of a line in SM_0A0B_0B0C sampling mode needs special handling
     if ((dma_desc->length & 0x7) != 0) {

@@ -24,11 +24,14 @@
 #include "soc/gpio_reg.h"
 #include "wiring.h"
 #include <stdio.h>
+
+
 #define USE_NATIVE_I2C
+
 #ifdef USE_NATIVE_I2C
 #include "driver/i2c.h"
 
-#define I2C_FREQ 100000
+#define I2C_FREQ 170000
 #define I2C_PORT 1
 #define ACK_CHECK_EN 0x1
 #define ACK_VAL 0x0
@@ -48,6 +51,10 @@ void twi_init(unsigned char sda, unsigned char scl){
 	
 }
 void twi_stop(void) {
+// 	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+// 	i2c_master_stop(cmd);
+// 	esp_err_t ret = i2c_master_cmd_begin(I2C_PORT, cmd, 1000 / portTICK_RATE_MS);
+// 	i2c_cmd_link_delete(cmd);
 	return;
 	//i2c_master_stop ? 
 }

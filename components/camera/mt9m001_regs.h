@@ -26,7 +26,7 @@
 #define OUTPUT_CONTROL 0x07
 #define OUPTUT_CONTROL_SUSPEND 0x01
 #define OUPTUT_CONTROL_ENABLE 0x02
-#define OUPTUT_CONTROL_TEST_DATA 0x06
+#define OUPTUT_CONTROL_TEST_DATA 0x40
 
 
 //Timing: Number of rows of integration
@@ -104,5 +104,7 @@
 #define ODD_ROW_EVEN_COLUMN_2 0x61
 #define EVEN_ROW_ODD_COLUMN_2 0x63
 #define ODD_ROW_ODD_COLUMN_2 0x64
+
+#define TEST_DATA 0x32
 
 #endif //__REG_REGS_H__

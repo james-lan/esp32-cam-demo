@@ -25,6 +25,9 @@ typedef union {
 typedef enum {
     /* camera sends byte sequence: s1, s2, s3, s4, ...
      * fifo receives: 00 s1 00 s2, 00 s2 00 s3, 00 s3 00 s4, ...
+     * NOTE: This should be a 2 channel mode, which seems very odd with the above.
+     * If nothing is on the 2nd channel it should be (X represents channel 2)
+     * 00 s1 XX XX, 00 s2 XX XX, 00 s3 XX XX, 00 s4 XX XX
      */
     SM_0A0B_0B0C = 0,
     /* camera sends byte sequence: s1, s2, s3, s4, ...
@@ -33,6 +36,8 @@ typedef enum {
     SM_0A0B_0C0D = 1,
     /* camera sends byte sequence: s1, s2, s3, s4, ...
      * fifo receives: 00 s1 00 00, 00 s2 00 00, 00 s3 00 00, ...
+     * NOTE: Again that seems off. Shouldn't it be: 
+     * 00 00 00 s1 
      */
     SM_0A00_0B00 = 3,
 } i2s_sampling_mode_t;
