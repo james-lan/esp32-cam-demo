@@ -47,7 +47,12 @@ This example has been tested with OV7725 camera module. Use it, if this is your 
 
 Other OV7xxx series should work as well, with some changes to camera configuration code. OV5xxx can work too, but it is advisable to choose the ones which support RGB or YUV 8-bit wide output bus. The ones which only output 10-bit raw data may be a bit harder to work with. Also choose the camera which can output a scaled down (QVGA or VGA) image. Use of larger frame buffers will require external SPI RAM.
 
-MT9M001 will work! On this branch (https://github.com/james-lan/esp32-cam-demo) I plan to submit push requests. XCLK needs to be low (I'm using it for astronomy, so lower is fine with me.) I have it working with 1,500,000 Hz. 
+
+
+#### MT9M001
+MT9M001 will work! On this branch (https://github.com/james-lan/esp32-cam-demo) I plan to submit push requests. XCLK needs to be low (I'm using it for astronomy, so lower is fine with me.) I have it working with 1,500,000 Hz. I need to work on the i2c portion, as right now it's very limited. 
+
+HOWEVER, this branch needs SPIRAM for the framebuffer. To use it on a 'normal' RAM one, you'll be limited to QVGA, and you'll want to change line " s_state->fb = (uint8_t*) heap_caps_calloc(s_state->fb_size, 1, MALLOC_CAP_SPIRAM);" to the original line above it. (Untested.) 
 
 ### ESP-IDF
 
