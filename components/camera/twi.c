@@ -26,16 +26,18 @@
 #include <stdio.h>
 
 
-#define USE_NATIVE_I2C
+//#define USE_NATIVE_I2C
 
 #ifdef USE_NATIVE_I2C
 #include "driver/i2c.h"
 
-#define I2C_FREQ 170000
+#define I2C_FREQ 100000
 #define I2C_PORT 1
 #define ACK_CHECK_EN 0x1
 #define ACK_VAL 0x0
 #define NACK_VAL 0x1 
+
+SemaphoreHandle_t twiSemaphore = NULL;
 
 void twi_init(unsigned char sda, unsigned char scl){
 	int i2c_master_port = I2C_PORT;
@@ -48,7 +50,8 @@ void twi_init(unsigned char sda, unsigned char scl){
 	conf.master.clk_speed = I2C_FREQ;
 	i2c_param_config(i2c_master_port, &conf);
 	i2c_driver_install(i2c_master_port, conf.mode, 0, 0, 0);
-	
+	twiSemaphore = xSemaphoreCreateBinary();
+	xSemaphoreGive(twiSemaphore); //Expected to fail with pdTRUE
 }
 void twi_stop(void) {
 // 	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
@@ -59,10 +62,13 @@ void twi_stop(void) {
 	//i2c_master_stop ? 
 }
 void twi_setClock(unsigned int freq){
+	
 	return;
 	//Going to ignore this for now, as it's set as a define, at initilization
 }
 uint8_t twi_writeTo(unsigned char address, unsigned char * buf, unsigned int len, unsigned char sendStop) {
+	
+	xSemaphoreTake(twiSemaphore, portMAX_DELAY);
 	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 	i2c_master_start(cmd);
 	i2c_master_write_byte(cmd, ( address /*<< 1*/ ) | I2C_MASTER_WRITE, ACK_CHECK_EN);
@@ -70,6 +76,7 @@ uint8_t twi_writeTo(unsigned char address, unsigned char * buf, unsigned int len
 	i2c_master_stop(cmd);
 	esp_err_t ret = i2c_master_cmd_begin(I2C_PORT, cmd, 1000 / portTICK_RATE_MS);
 	i2c_cmd_link_delete(cmd);
+	xSemaphoreGive(twiSemaphore);
 	return ret;
 }
 uint8_t twi_readFrom(unsigned char address, unsigned char * buf, unsigned int len, unsigned char sendStop)
@@ -77,6 +84,7 @@ uint8_t twi_readFrom(unsigned char address, unsigned char * buf, unsigned int le
 	if (len == 0) {
 		return ESP_OK;
 	}
+	xSemaphoreTake(twiSemaphore, portMAX_DELAY);
 	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 	i2c_master_start(cmd);
 	i2c_master_write_byte(cmd, ( address /*<< 1*/ ) | I2C_MASTER_READ, ACK_CHECK_EN);
@@ -87,6 +95,7 @@ uint8_t twi_readFrom(unsigned char address, unsigned char * buf, unsigned int le
 	i2c_master_stop(cmd);
 	esp_err_t ret = i2c_master_cmd_begin(I2C_PORT, cmd, 1000 / portTICK_RATE_MS);
 	i2c_cmd_link_delete(cmd);
+	xSemaphoreGive(twiSemaphore);
 	return ret;
 }
 

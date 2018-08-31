@@ -64,6 +64,7 @@ static camera_pixelformat_t s_pixel_format;
 
 void app_main()
 {
+	const TickType_t xDelay = 1000 / portTICK_PERIOD_MS;
     esp_log_level_set("wifi", ESP_LOG_WARN);
     esp_log_level_set("gpio", ESP_LOG_WARN);
 
@@ -100,6 +101,10 @@ void app_main()
     err = camera_probe(&camera_config, &camera_model);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Camera probe failed with error 0x%x", err);
+	
+
+	vTaskDelay( xDelay );
+	esp_restart();
         return;
     }
 
@@ -118,7 +123,6 @@ void app_main()
 	    ESP_LOGI(TAG, "Detected MT9M001 camera, using greyscale format");
 	    s_pixel_format = CAMERA_PF_GRAYSCALE;
 	    camera_config.frame_size = CAMERA_FRAME_SIZE;
-	    camera_config.jpeg_quality = 15;
     } else {
         ESP_LOGE(TAG, "Camera not supported");
         return;
@@ -167,14 +171,64 @@ static esp_err_t write_frame(http_context_t http_ctx)
     };
     return http_response_write(http_ctx, &fb_data);
 }
+static esp_err_t write_frame_multi(http_context_t http_ctx)
+{
+	http_buffer_t fb_data = {
+		.data = camera_get_multi_fb(),
+		.size = camera_get_data_size(),
+		.data_is_persistent = true
+	};
+	return http_response_write(http_ctx, &fb_data);
+}
+static esp_err_t write_frame_pbm_line(http_context_t http_ctx, int line)
+{
+	http_buffer_t fb_data = {
+		.data = camera_get_fb()+line*camera_get_fb_width(),
+		.size = camera_get_fb_width(),
+		.data_is_persistent = false
+	};
+	return http_response_write(http_ctx, &fb_data);
+}
+static esp_err_t write_frame_pbm_line_end(http_context_t http_ctx)
+{
+	uint8_t line_end = 0;
+	http_buffer_t fb_data = {
+		.data = &line_end,
+		.size = 1,
+		.data_is_persistent = false
+	};
+	return http_response_write(http_ctx, &fb_data);
+}
+
 
 static void handle_grayscale_pgm(http_context_t http_ctx, void* ctx)
 {
+	
+	int i =0, j = 0;
+	uint8_t *frame_single, *frame_multi;
+	frame_single=camera_get_fb();
+	frame_multi=camera_get_multi_fb();
     esp_err_t err = camera_run();
     if (err != ESP_OK) {
         ESP_LOGD(TAG, "Camera capture failed with error = %d", err);
         return;
     }
+    for (j = 0; j < camera_get_data_size(); j++){
+	    frame_multi[j] = frame_single[j];
+    }
+    /*
+    for (i = 0; i < 2; i++) {
+	ESP_LOGI(TAG, "Frame capture started: %i", i);
+    err = camera_run();
+    if (err != ESP_OK) {
+	    ESP_LOGD(TAG, "Camera capture failed with error = %d on frame %d", err, i);
+	    return;
+    }
+    for (j = 0; j < camera_get_data_size(); j++){
+	    frame_multi[j] += frame_single[j];
+    }
+    }
+    //*/
     char* pgm_header_str;
     asprintf(&pgm_header_str, "P5 %d %d %d\n",
             camera_get_fb_width(), camera_get_fb_height(), 255);
@@ -188,8 +242,12 @@ static void handle_grayscale_pgm(http_context_t http_ctx, void* ctx)
     http_buffer_t pgm_header = { .data = pgm_header_str };
     http_response_write(http_ctx, &pgm_header);
     free(pgm_header_str);
-
-    write_frame(http_ctx);
+ /*   for (i=0; i<camera_get_fb_height; i++) {
+	    write_frame_pbm_line(http_ctx, i);
+	    write_frame_pbm_line_end(http_ctx);
+    }//*/
+    //write_frame(http_ctx);
+    write_frame_multi(http_ctx);
     http_response_end(http_ctx);
 }
 

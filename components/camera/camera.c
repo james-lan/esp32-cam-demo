@@ -9,7 +9,7 @@
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
+// See the License for the specific n governing permissions and
 // limitations under the License.
 #include <stdio.h>
 #include <stdlib.h>
@@ -317,6 +317,7 @@ esp_err_t camera_init(const camera_config_t* config)
     ESP_LOGI(TAG, "Allocating frame buffer (%d bytes)", s_state->fb_size);
     //s_state->fb = (uint8_t*) calloc(s_state->fb_size, 1);
     s_state->fb = (uint8_t*) heap_caps_calloc(s_state->fb_size, 1, MALLOC_CAP_SPIRAM);
+    s_state->multi_fb = (uint8_t*) heap_caps_calloc(s_state->fb_size, 1, MALLOC_CAP_SPIRAM);
     if (s_state->fb == NULL) {
         ESP_LOGE(TAG, "Failed to allocate frame buffer");
         err = ESP_ERR_NO_MEM;
@@ -338,6 +339,7 @@ esp_err_t camera_init(const camera_config_t* config)
         err = ESP_ERR_NO_MEM;
         goto fail;
     }
+    xSemaphoreGive(s_state->frame_ready);
     if (!xTaskCreatePinnedToCore(&dma_filter_task, "dma_filter", 4096, NULL, 10, &s_state->dma_filter_task, 1)) {
         ESP_LOGE(TAG, "Failed to create DMA filter task");
         err = ESP_ERR_NO_MEM;
@@ -416,6 +418,14 @@ uint8_t* camera_get_fb()
     return s_state->fb;
 }
 
+uint8_t* camera_get_multi_fb()
+{
+	if (s_state == NULL) {
+		return NULL;
+	}
+	return s_state->fb;
+}
+
 int camera_get_fb_width()
 {
     if (s_state == NULL) {
@@ -452,8 +462,10 @@ esp_err_t camera_run()
 #endif // _NDEBUG
     i2s_run();
     ESP_LOGI(TAG, "Waiting for frame");
+    ESP_LOGI(TAG, "Getting: xSemaphoreTake: frame ready");
     xSemaphoreTake(s_state->frame_ready, portMAX_DELAY);
     //xSemaphoreTake(s_state->frame_ready, ( TickType_t ) 0x000fffffUL);
+    ESP_LOGI(TAG, "xSemaphoreTake: frame ready");
     struct timeval tv_end;
     gettimeofday(&tv_end, NULL);
     int time_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + (tv_end.tv_usec - tv_start.tv_usec) / 1000;

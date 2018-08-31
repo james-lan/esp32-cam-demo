@@ -97,7 +97,7 @@ uint8_t SCCB_Write16(uint8_t slv_addr, uint8_t reg, uint8_t data[2])
 		return ret;
 	}
 	printf("SCCB_Write16 [%02x]=%02x %02x success\n", (int)reg, data[0], data[1]);
-	return ret;
+	return 0;
 }
 
 uint8_t SCCB_Read16(uint8_t slv_addr, uint8_t reg, uint8_t data[2])

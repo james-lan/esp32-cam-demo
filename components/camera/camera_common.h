@@ -73,5 +73,6 @@ typedef struct {
     QueueHandle_t data_ready;
     SemaphoreHandle_t frame_ready;
     TaskHandle_t dma_filter_task;
+    uint8_t *multi_fb;
 } camera_state_t;
 

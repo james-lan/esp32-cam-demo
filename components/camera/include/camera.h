@@ -126,6 +126,13 @@ esp_err_t camera_deinit();
 uint8_t* camera_get_fb();
 
 /**
+ * @brief Obtain the pointer to framebuffer allocated by camera_init function.
+ *
+ * @return pointer to framebuffer
+ */
+uint8_t* camera_get_multi_fb();
+
+/**
  * @brief Return the size of valid data in the framebuffer
  *
  * For grayscale mode, this function returns width * height of the framebuffer.
