@@ -56,7 +56,7 @@ static camera_pixelformat_t s_pixel_format;
 
 #define CAMERA_PIXEL_FORMAT CAMERA_PF_GRAYSCALE
 //#define CAMERA_FRAME_SIZE CAMERA_FS_QVGA
-//#define CAMERA_FRAME_SIZE CAMERA_FS_VGA
+// #define CAMERA_FRAME_SIZE CAMERA_FS_VGA
 //#define CAMERA_FRAME_SIZE CAMERA_FS_SVGA
 #define CAMERA_FRAME_SIZE CAMERA_FS_SXGA
 
@@ -130,13 +130,16 @@ void app_main()
 
     camera_config.pixel_format = s_pixel_format;
     err = camera_init(&camera_config);
+    ESP_LOGI(TAG, "Camera init done?");
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
         return;
     }
-
+    
+    ESP_LOGI(TAG, "Wifi init started?");
     initialise_wifi();
-
+    ESP_LOGI(TAG, "Wifi init done?");
+    
     http_server_t server;
     http_server_options_t http_options = HTTP_SERVER_OPTIONS_DEFAULT();
     ESP_ERROR_CHECK( http_server_start(&http_options, &server) );
@@ -209,21 +212,24 @@ static void handle_grayscale_pgm(http_context_t http_ctx, void* ctx)
 	frame_single=camera_get_fb();
 	frame_multi=camera_get_multi_fb();
     esp_err_t err = camera_run();
-    if (err != ESP_OK) {
+//*
+     if (err != ESP_OK) {
         ESP_LOGD(TAG, "Camera capture failed with error = %d", err);
         return;
     }
     for (j = 0; j < camera_get_data_size(); j++){
 	    frame_multi[j] = frame_single[j];
     }
+    //*/
     /*
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < 3; i++) {
 	ESP_LOGI(TAG, "Frame capture started: %i", i);
     err = camera_run();
     if (err != ESP_OK) {
 	    ESP_LOGD(TAG, "Camera capture failed with error = %d on frame %d", err, i);
 	    return;
     }
+    ESP_LOGD(TAG, "Camera size = %i", camera_get_data_size());
     for (j = 0; j < camera_get_data_size(); j++){
 	    frame_multi[j] += frame_single[j];
     }
@@ -235,19 +241,21 @@ static void handle_grayscale_pgm(http_context_t http_ctx, void* ctx)
     if (pgm_header_str == NULL) {
         return;
     }
-
     size_t response_size = strlen(pgm_header_str) + camera_get_data_size();
+    //size_t response_size = strlen(pgm_header_str) + camera_get_fb_height()*(1+camera_get_fb_width());
+    ESP_LOGI(TAG, "Response size: %i", response_size);
     http_response_begin(http_ctx, 200, "image/x-portable-graymap", response_size);
     http_response_set_header(http_ctx, "Content-disposition", "inline; filename=capture.pgm");
     http_buffer_t pgm_header = { .data = pgm_header_str };
     http_response_write(http_ctx, &pgm_header);
     free(pgm_header_str);
- /*   for (i=0; i<camera_get_fb_height; i++) {
+ /*
+     for (i=0; i<camera_get_fb_height(); i++) {
 	    write_frame_pbm_line(http_ctx, i);
 	    write_frame_pbm_line_end(http_ctx);
     }//*/
-    //write_frame(http_ctx);
-    write_frame_multi(http_ctx);
+    write_frame(http_ctx);
+    //write_frame_multi(http_ctx);
     http_response_end(http_ctx);
 }
 

@@ -74,18 +74,18 @@ const int resolution[][2] = {
         { 1600, 1200 }, /* UXGA  */
 };
 
-static void i2s_init();
-static void i2s_run();
+static void  i2s_init();
+static void  i2s_run();
 static void IRAM_ATTR gpio_isr(void* arg);
 static void IRAM_ATTR i2s_isr(void* arg);
 static esp_err_t dma_desc_init();
 static void dma_desc_deinit();
-static void dma_filter_task(void *pvParameters);
-static void dma_filter_grayscale(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst);
-static void dma_filter_grayscale_highspeed(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst);
+static void IRAM_ATTR dma_filter_task(void *pvParameters);
+static void IRAM_ATTR dma_filter_grayscale(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst);
+static void IRAM_ATTR dma_filter_grayscale_highspeed(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst);
 static void dma_filter_jpeg(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst);
 static void dma_filter_rgb565(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst);
-static void i2s_stop();
+static void  i2s_stop();
 
 static bool is_hs_mode()
 {
@@ -210,6 +210,7 @@ esp_err_t camera_probe(const camera_config_t* config, camera_model_t* out_camera
 
 esp_err_t camera_init(const camera_config_t* config)
 {
+    ESP_LOGD(TAG, "Camera Init");
     if (!s_state) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -248,6 +249,7 @@ esp_err_t camera_init(const camera_config_t* config)
             err = ESP_ERR_NOT_SUPPORTED;
             goto fail;
         }
+        //TODO: Accurate for MT9M001? 
         s_state->fb_size = (s_state->width+1) * s_state->height;
         if (is_hs_mode()) {
 		s_state->sampling_mode = SM_0A0B_0C0D;
@@ -313,18 +315,28 @@ esp_err_t camera_init(const camera_config_t* config)
             s_state->in_bytes_per_pixel, s_state->fb_bytes_per_pixel,
             s_state->fb_size, s_state->sampling_mode,
             s_state->width, s_state->height);
-
+    ESP_LOGI(TAG, "Free: %d bytes", xPortGetFreeHeapSize());	
     ESP_LOGI(TAG, "Allocating frame buffer (%d bytes)", s_state->fb_size);
     //s_state->fb = (uint8_t*) calloc(s_state->fb_size, 1);
+    s_state->fb = NULL;
     s_state->fb = (uint8_t*) heap_caps_calloc(s_state->fb_size, 1, MALLOC_CAP_SPIRAM);
-    s_state->multi_fb = (uint8_t*) heap_caps_calloc(s_state->fb_size, 1, MALLOC_CAP_SPIRAM);
+    
     if (s_state->fb == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate frame buffer");
+        ESP_LOGI(TAG, "Failed to allocate frame buffer");
         err = ESP_ERR_NO_MEM;
         goto fail;
     }
-
-    ESP_LOGD(TAG, "Initializing I2S and DMA");
+    ESP_LOGI(TAG, "Free: %d bytes", xPortGetFreeHeapSize());
+    ESP_LOGI(TAG, "Allocating multi frame buffer (%d bytes)", s_state->fb_size);
+    s_state->multi_fb = NULL;
+    s_state->multi_fb = (uint8_t*) heap_caps_calloc(s_state->fb_size, 1, MALLOC_CAP_SPIRAM);
+    if (s_state->multi_fb == NULL) {
+	    ESP_LOGI(TAG, "Failed to allocate multi frame buffer");
+	    err = ESP_ERR_NO_MEM;
+	    goto fail;
+    }
+    ESP_LOGI(TAG, "Free: %d bytes", xPortGetFreeHeapSize());
+    ESP_LOGI(TAG, "Initializing I2S and DMA");
     i2s_init();
     err = dma_desc_init();
     if (err != ESP_OK) {
@@ -339,20 +351,20 @@ esp_err_t camera_init(const camera_config_t* config)
         err = ESP_ERR_NO_MEM;
         goto fail;
     }
-    xSemaphoreGive(s_state->frame_ready);
+ //   xSemaphoreGive(s_state->frame_ready);
     if (!xTaskCreatePinnedToCore(&dma_filter_task, "dma_filter", 4096, NULL, 10, &s_state->dma_filter_task, 1)) {
-        ESP_LOGE(TAG, "Failed to create DMA filter task");
+        ESP_LOGI(TAG, "Failed to create DMA filter task");
         err = ESP_ERR_NO_MEM;
         goto fail;
     } else {
-	    ESP_LOGV(TAG, "Created DMA filter task");
+	    ESP_LOGI(TAG, "Created DMA filter task");
     }
 
-    ESP_LOGD(TAG, "Initializing GPIO interrupts");
+    ESP_LOGI(TAG, "Initializing GPIO interrupts");
     vsync_intr_disable();
     err = gpio_isr_handler_add(s_state->config.pin_vsync, &gpio_isr, NULL);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_isr_handler_add failed (%x)", err);
+        ESP_LOGI(TAG, "gpio_isr_handler_add failed (%x)", err);
         goto fail;
     }
 
@@ -374,10 +386,11 @@ esp_err_t camera_init(const camera_config_t* config)
     //config->xclk_freq_hz = 1000000;
 //    camera_enable_out_clock(config);
     
-    ESP_LOGD(TAG, "Init done");
+    ESP_LOGI(TAG, "Init done");
     return ESP_OK;
 
 fail:
+    ESP_LOGD(TAG, "Init FAILED");
     camera_deinit();
     return err;
 }
@@ -423,7 +436,7 @@ uint8_t* camera_get_multi_fb()
 	if (s_state == NULL) {
 		return NULL;
 	}
-	return s_state->fb;
+	return s_state->multi_fb;
 }
 
 int camera_get_fb_width()
@@ -464,13 +477,15 @@ esp_err_t camera_run()
     ESP_LOGI(TAG, "Waiting for frame");
     ESP_LOGI(TAG, "Getting: xSemaphoreTake: frame ready");
     xSemaphoreTake(s_state->frame_ready, portMAX_DELAY);
+    ESP_LOGI(TAG, "Got: xSemaphoreTake: frame ready");
     //xSemaphoreTake(s_state->frame_ready, ( TickType_t ) 0x000fffffUL);
-    ESP_LOGI(TAG, "xSemaphoreTake: frame ready");
+    ESP_LOGI(TAG, "Took: xSemaphoreTake: frame ready");
     struct timeval tv_end;
     gettimeofday(&tv_end, NULL);
     int time_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + (tv_end.tv_usec - tv_start.tv_usec) / 1000;
     ESP_LOGI(TAG, "Frame %d done in %d ms", s_state->frame_count, time_ms);
     s_state->frame_count++;
+    //xSemaphoreGive(s_state->frame_ready);
     return ESP_OK;
 }
 
@@ -572,7 +587,7 @@ static inline void i2s_conf_reset()
     }
 }
 
-static void i2s_init()
+static void  i2s_init()
 {
     camera_config_t* config = &s_state->config;
 
@@ -658,10 +673,11 @@ static void i2s_init()
     esp_intr_alloc(ETS_I2S0_INTR_SOURCE,
     ESP_INTR_FLAG_INTRDISABLED | ESP_INTR_FLAG_LEVEL1 | ESP_INTR_FLAG_IRAM,
             &i2s_isr, NULL, &s_state->i2s_intr_handle);
+    ESP_EARLY_LOGV(TAG, "i2s init, done");
 }
 
 
-static void i2s_stop()
+static void  i2s_stop()
 {
     esp_intr_disable(s_state->i2s_intr_handle);
     vsync_intr_disable();
@@ -670,9 +686,9 @@ static void i2s_stop()
     size_t val = SIZE_MAX;
     BaseType_t higher_priority_task_woken;
     xQueueSendFromISR(s_state->data_ready, &val, &higher_priority_task_woken);
-}
+}	
 
-static void i2s_run()
+static void  i2s_run()
 {
 #ifndef _NDEBUG
     for (int i = 0; i < s_state->dma_desc_count; ++i) {
@@ -686,12 +702,14 @@ static void i2s_run()
     // wait for vsync
     ESP_LOGD(TAG, "Waiting for positive edge on VSYNC");
     while (gpio_get_level(s_state->config.pin_vsync) == 0) {
-        ;
+	ESP_LOGD(TAG, "Still waiting for positive edge on VSYNC");
     }
+    ESP_LOGD(TAG, "Waiting for negative edge on VSYNC");
     while (gpio_get_level(s_state->config.pin_vsync) != 0) {
-        ;
+	    ESP_LOGD(TAG, "Still Waiting for negative edge on VSYNC");
     }
-    ESP_LOGD(TAG, "Got VSYNC");
+    ESP_LOGI(TAG, "Got VSYNC");
+    ESP_LOGI(TAG, "SIZE_MAX: %i", SIZE_MAX);
 
     s_state->dma_done = false;
     s_state->dma_desc_cur = 0;
@@ -711,7 +729,7 @@ static void i2s_run()
         vsync_intr_enable();
     }
     I2S0.conf.rx_start = 1;
-
+    ESP_LOGI(TAG, "I2S Startup");
 }
 
 static void IRAM_ATTR signal_dma_buf_received(bool* need_yield)
@@ -732,7 +750,7 @@ static void IRAM_ATTR i2s_isr(void* arg)
     I2S0.int_clr.val = I2S0.int_raw.val;
     bool need_yield;
     signal_dma_buf_received(&need_yield);
-//    ESP_EARLY_LOGV(TAG, "isr, cnt=%d", s_state->dma_received_count);
+//     ESP_EARLY_LOGI(TAG, "isr, cnt=%d", s_state->dma_received_count);
     if (s_state->dma_received_count == s_state->height * s_state->dma_per_line) {
         i2s_stop();
     }
@@ -744,7 +762,7 @@ static void IRAM_ATTR i2s_isr(void* arg)
 static void IRAM_ATTR gpio_isr(void* arg)
 {
     bool need_yield = false;
-//    ESP_EARLY_LOGV(TAG, "gpio isr, cnt=%d", s_state->dma_received_count);
+//     ESP_EARLY_LOGI(TAG, "gpio isr, cnt=%d", s_state->dma_received_count);
     if (gpio_get_level(s_state->config.pin_vsync) == 0 &&
             s_state->dma_received_count > 0 &&
             !s_state->dma_done) {
@@ -764,16 +782,18 @@ static size_t IRAM_ATTR get_fb_pos()
 
 static void IRAM_ATTR dma_filter_task(void *pvParameters)
 {
-//	ESP_LOGV(TAG, "dma_flt: START");
+// 	ESP_LOGI(TAG, "dma_flt: START");
     while (true) {
         size_t buf_idx;
         xQueueReceive(s_state->data_ready, &buf_idx, portMAX_DELAY);
+// 	ESP_LOGI(TAG, "buf_idx: %i", buf_idx);
         if (buf_idx == SIZE_MAX) {
             s_state->data_size = get_fb_pos();
             xSemaphoreGive(s_state->frame_ready);
+	    ESP_LOGI(TAG, "Gave: xSemaphoreGive: frame ready");
             continue;
         }
-
+//         ESP_EARLY_LOGV(TAG, "dma_flt: flt_count=%d ", s_state->dma_filtered_count);
         size_t fb_pos = get_fb_pos();
 	fb_pos += (int) fb_pos / s_state->width;
         assert(fb_pos <= s_state->fb_size + s_state->width *
@@ -784,13 +804,13 @@ static void IRAM_ATTR dma_filter_task(void *pvParameters)
         lldesc_t* desc = &s_state->dma_desc[buf_idx];
         (*s_state->dma_filter)(buf, desc, pfb);
         s_state->dma_filtered_count++;
-//        ESP_LOGV(TAG, "dma_flt: flt_count=%d ", s_state->dma_filtered_count);
+	ESP_LOGV(TAG, "dma_flt: flt_count=%d ", s_state->dma_filtered_count);
     }
 }
 
 static void IRAM_ATTR dma_filter_grayscale(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst)
 {
-//	ESP_LOGV(TAG, "dma_filter_grayscale: start ");
+    ESP_LOGV(TAG, "dma_filter_grayscale: start ");
     assert(s_state->sampling_mode == SM_0A0B_0C0D);
     size_t end = dma_desc->length / sizeof(dma_elem_t) / 4;
     for (size_t i = 0; i < end; ++i) {
@@ -806,6 +826,7 @@ static void IRAM_ATTR dma_filter_grayscale(const dma_elem_t* src, lldesc_t* dma_
 
 static void IRAM_ATTR dma_filter_grayscale_highspeed(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst)
 {
+ 	ESP_EARLY_LOGV(TAG, "dma_filter_grayscale_highspeed: start ");
 //	assert(s_state->sampling_mode == SM_0A00_0B00);
 	assert(s_state->sampling_mode == SM_0A0B_0C0D);
     size_t end = dma_desc->length / sizeof(dma_elem_t) / 4;

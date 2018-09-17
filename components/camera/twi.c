@@ -26,7 +26,7 @@
 #include <stdio.h>
 
 
-//#define USE_NATIVE_I2C
+#define USE_NATIVE_I2C
 
 #ifdef USE_NATIVE_I2C
 #include "driver/i2c.h"
@@ -203,7 +203,7 @@ void twi_init(unsigned char sda, unsigned char scl){
 
   pinMode(twi_sda, INPUT_PULLUP);
   pinMode(twi_scl, INPUT_PULLUP);
-  twi_setClock(100000);
+  twi_setClock(200000);
 }
 
 void twi_stop(void){

@@ -216,7 +216,7 @@ static int reset(sensor_t *sensor)
 		ret |= SCCB_Write16(sensor->slv_addr, RESTART, reg);
 	}
 	//*/
-	/*
+	//*
 	SCCB_Read16(sensor->slv_addr, 0x00, reg);
 	SCCB_Read16(sensor->slv_addr, 0x01, reg);
 	SCCB_Read16(sensor->slv_addr, 0x02, reg);
